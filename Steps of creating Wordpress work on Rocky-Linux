@@ -1,0 +1,260 @@
+I am including steps that I used in Project 2 where I used Google Cloud to install Wordpress on alternate distribution of Linux which in my case I used Rocky Linux.
+First I installed PHP
+sudo apt install php libapache2-mod-php
+sudo systemctl restart apache2
+Then to check the status and if there are any errors 
+systemctl status apache2
+Then to check the install
+cd /var/www/html/
+sudo nano info.php
+So in the nano.php file
+<?php
+phpinfo();
+?>
+cd /etc/apache2/mods-enabled/
+sudo nano dir.conf
+To check the configuration
+apachectl configtest
+Then to reload the apache2
+sudo systemctl reload apache2
+sudo systemctl restart apache2
+Now I created a basic php file
+cd /var/www/html/
+sudo nano index.php
+To create a index.php page these codes were used
+<html>
+<head>
+<title>Broswer Detector</title>
+</head>
+<body>
+<p>You are using the following browser to view this site:</p>
+
+<?php
+echo $_SERVER['HTTP_USER_AGENT'] . "\n\n";
+
+$browser = get_browser(null, true);
+print_r($browser);
+?>
+</body>
+</html>
+
+Now to install and setup MariaDB sudo apt is used
+sudo apt install mariadb-server mariadb-client
+To check if it is running or not
+systemctl status mariadb
+
+Now a  post installation script is run which is called mysql_secure_installation
+sudo mysql_secure_installation
+Then I created a root password
+Then to become the root Linux user, I used
+sudo su
+A new database for new user is created using these commands
+MariaDB [(none)]> create database linuxdb;
+MariaDB [(none)]> grant all privileges on linuxdb.* to 'webapp'@'localhost';
+MariaDB [(none)]> show databases;
+Then we exit out as a root user by
+MariaDB [(none)]> \q
+root@hostname:~# exit
+Then a table is created
+mariadb -u webapp -p
+MariaDB [(none)]> show databases;
+MariaDB [(none)]> use linuxdb;
+
+These commands are used to create a table distribution
+MariaDB [(linuxdb)]> create table distributions
+    -> (
+    -> id int unsigned not null auto_increment,
+    -> name varchar(150) not null,
+    -> developer varchar(150) not null,
+    -> founded date not null,
+    -> primary key (id)
+    -> );
+Query OK, 0 rows affected (0.07 sec)
+
+MariaDB [(linuxdb)]> show tables;
+MariaDB [(linuxdb)]> describe distributions;
+These records are added to the table
+MariaDB [(linuxdb)]> insert into distributions (name, developer, founded) values
+    -> ('Debian', 'The Debian Project', '1993-09-15'),
+    -> ('Ubuntu', 'Canonical Ltd.', '2004-10-20'),
+    -> ('Fedora', 'Fedora Project', '2003-11-06');
+Query OK, 3 rows affected (0.004 sec)
+Records: 3  Duplicates: 0  Warnings: 0
+MariaDB [(linuxdb)]> select * from distributions;
+These tasks are done to refresh the data
+MariaDB [(linuxdb)]> select name from distributions;
+MariaDB [(linuxdb)]> select founded from distributions;
+MariaDB [(linuxdb)]> select name, developer from distributions;
+MariaDB [(linuxdb)]> select name from distributions where name='Debian';
+MariaDB [(linuxdb)]> select developer from distributions where name='Ubuntu';
+MariaDB [(linuxdb)]> select * from distributions;
+MariaDB [(linuxdb)]> alter table distributions
+    -> add packagemanager char(3) after name;
+MariaDB [(linuxdb)]> describe distributions;
+MariaDB [(linuxdb)]> update distributions set packagemanager='APT' where id='1';
+MariaDB [(linuxdb)]> update distributions set packagemanager='APT' where id='2';
+MariaDB [(linuxdb)]> update distributions set packagemanager='DNF' where id='3';
+MariaDB [(linuxdb)]> select * from distributions;
+MariaDB [(linuxdb)]> delete from distributions where name='Debian';
+MariaDB [(linuxdb)]> insert into distributions
+    -> (name, packagemanager, developer, founded) values
+    -> ('Debian', 'The Debian Project', '1993-09-15'),
+    -> ('CentOS', 'YUM', 'The CentOS Project', '2004-05-14');
+MariaDB [(linuxdb)]> select * from distributions;
+MariaDB [(linuxdb)]> select name, packagemanager
+    -> from distributions
+    -> where founded < '2004-01-01';
+MariaDB [(linuxdb)]> select name from distributions order by founded;
+MariaDB [(linuxdb)]> \q
+
+Now we install PHP and MySQL support
+sudo apt install php-mysql
+
+sudo systemctl restart apache2
+sudo systemctl restart mariadb
+
+To connect PHP to MariaDB we need to authenticate it
+cd /var/www/html/
+sudo touch login.php
+sudo chmod 640 login.php
+sudo chown :www-data login.php
+ls -l login.php
+sudo nano login.php
+
+A distros.php file is created
+sudo nano distros.php
+
+So in the nano buffer, we add these commands
+<html>
+<head>
+<title>MySQL Server Example</title>
+</head>
+<body>
+
+<?php
+
+// Load MySQL credentials
+require_once 'login.php';
+
+// Establish connection
+$conn = mysqli_connect($db_hostname, $db_username, $db_password) or
+  die("Unable to connect");
+
+// Open database
+mysqli_select_db($conn, $db_database) or
+  die("Could not open database '$db_database'");
+
+// QUERY 1
+$query1 = "show tables from $db_database";
+$result1 = mysqli_query($conn, $query1);
+
+$tblcnt = 0;
+while($tbl = mysqli_fetch_array($result1)) {
+  $tblcnt++;
+}
+
+if (!$tblcnt) {
+  echo "<p>There are no tables</p>\n";
+}
+else {
+  echo "<p>There are $tblcnt tables</p>\n";
+}
+
+// Free result1 set
+mysqli_free_result($result1);
+
+// QUERY 2
+$query2 = "select name, developer from distributions";
+$result2 = mysqli_query($conn, $query2);
+
+$row = mysqli_fetch_array($result2, MYSQLI_NUM);
+printf ("%s (%s)\n", $row[0], $row[1]);
+echo "<br/>";
+
+$row = mysqli_fetch_array($result2, MYSQLI_ASSOC);
+printf ("%s (%s)\n", $row["name"], $row["developer"]);
+
+// Free result2 set
+mysqli_free_result($result2);
+
+// Query 3
+$query3 = "select * from distributions";
+$result3 = mysqli_query($conn, $query3);
+
+while($row = $result3->fetch_assoc()) {
+  echo "<p>Owner " . $row["developer"] . " manages distribution " . $row["name"] . ".</p>";
+}
+
+mysqli_free_result($result3);
+
+$result4 = mysqli_query($conn, $query3);
+while($row = $result4->fetch_assoc()) {
+  echo "<p>Distribution " . $row["name"] . " was released on " . $row["founded"] . ".</p>";
+}
+
+// Free result4 set
+mysqli_free_result($result4);
+
+/* Close connection */
+mysqli_close($conn);
+
+?>
+
+</body>
+</html>
+
+Finally to test Syntax, we use this 
+sudo php -f login.php
+sudo php -f distros.php
+
+Finally these are the steps that were taken to install Wordpress
+
+First some PHP modules were added
+sudo apt install php-curl php-xml php-imagick php-mbstring php-zip php-intl
+
+Then we restart apache2 and mariadb
+sudo systemctl restart apache2
+sudo systemctl restart mariadb
+
+Now to download and extract Wordpress, first it is downloaded as tar.gz file
+cd /var/www/html
+sudo wget https://wordpress.org/latest.tar.gz
+sudo tar -xzvf latest.tar.gz
+
+After following this command, it will create a directory called wordpress in the same directory.
+/var/www/html/wordpress
+
+We now create a database and a user to login
+sudo su
+mariadb -u root
+
+We now create a new user for the WordPress database and replace with a strong password
+Then I create a new database for WordPress
+Making sure to grant all privileges to the new user for the new database is important
+Then we examine the output and Exit the MariaDB prompt
+
+The codes that are used are following
+create user 'wordpress'@'localhost' identified by 'XXXXXXXXX';
+create database wordpress;
+grant all privileges on wordpress.* to 'wordpress'@'localhost';
+show databases;
+\q
+
+We then Set up wp-config.php
+These steps would Change to the wordpress directory, copy and rename the wp-config-sample.php file to wp-config.php.
+And edit the file and add your WordPress database name, user name, and password in the fields for DB_NAME, DB_USER, and DB_PASSWORD.
+
+cd /var/www/html/wordpress
+sudo cp wp-config-sample.php wp-config.php
+sudo nano wp-config.php
+
+To disable FTP uploads to the site, I used
+define('FS_METHOD','direct');
+
+To change file ownership, this code is used
+sudo chown -R www-data:www-data *
+
+Finally to run the Install script I used
+http://11.111.111.11/blog/wp-admin/install.php
+
+These are the codes and steps that were used on Project 2 of installing Wordpress on alternate distribution of Linux.
